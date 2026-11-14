@@ -114,6 +114,8 @@ details.about{border-top:1px solid var(--line);padding-top:12px;color:var(--mute
 details.about summary{cursor:pointer;font-weight:700;color:var(--ink);min-height:32px}
 details.about ul{margin:8px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:5px;max-width:65ch}
 @media (max-width:520px){ h1{font-size:1.55rem} .where strong{font-size:1.05rem} .mainrow{grid-template-columns:1fr 1fr} .mainrow .play{grid-column:1 / -1} .top .field{width:100%} }
+#staffHost .rowsep{stroke:var(--grid);stroke-width:1}
+@media (max-width:520px){ .mainrow{position:fixed;left:0;right:0;bottom:0;z-index:20;grid-template-columns:1.3fr 1fr 1fr;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line)} .mainrow .play{grid-column:auto} .mainrow button{min-height:48px} .wrap{padding-bottom:96px} }
 @media (prefers-reduced-motion:reduce){ .rollwrap{scroll-behavior:auto} }
 </style>
 
@@ -134,11 +136,11 @@ details.about ul{margin:8px 0 0;padding-left:1.2em;display:flex;flex-direction:c
     </div>
   </header>
 
-  <section class="stage" aria-label="악보 한 줄">
+  <section class="stage" aria-label="악보 네 마디">
     <div class="linebar">
-      <button type="button" id="prevLine" aria-label="이전 줄">‹</button>
+      <button type="button" id="prevLine" aria-label="이전 4마디">‹</button>
       <div class="where"><strong id="lineTitle"></strong><span id="lineSub"></span></div>
-      <button type="button" id="nextLine" aria-label="다음 줄">›</button>
+      <button type="button" id="nextLine" aria-label="다음 4마디">›</button>
     </div>
     <div class="rollwrap" id="rollWrap"><div id="staffHost" role="img" aria-label="이 줄의 악보"></div><svg id="roll" role="img" aria-label="이 줄의 음 그림"></svg></div>
     <div class="now">
@@ -160,12 +162,12 @@ details.about ul{margin:8px 0 0;padding-left:1.2em;display:flex;flex-direction:c
           <button type="button" data-v="staff">악보 (오선)</button>
           <button type="button" data-v="roll">막대 그림</button>
         </div>
-        <p class="hint">악보는 노래 줄만 그립니다. 색이 있는 음표가 내 음입니다.</p>
+        <p class="hint">한 화면에 네 마디씩, 노래 줄만 그립니다. 재생 중에는 빨간 선만 움직이고, 악보는 네 마디가 끝날 때 넘어갑니다.</p>
       </div>
       <div class="field">
         <span class="lab" id="rangeLab">재생 범위</span>
         <div class="seg" id="rangeSeg" role="group" aria-labelledby="rangeLab">
-          <button type="button" data-v="line">이 줄 반복</button>
+          <button type="button" data-v="line">이 4마디 반복</button>
           <button type="button" data-v="section">구간 반복</button>
           <button type="button" data-v="rest">여기서 끝까지</button>
         </div>
@@ -265,14 +267,14 @@ const DIV0=SONG.divisi[0], DIV1=SONG.divisi[1];
 const V=SONG.vocal.map(a=>({m:a[0],bt:a[1],t:mStart[a[0]]+a[1],d:a[2],p:a[3],mask:a[4],letter:a[5],alter:a[6]}));
 const P=SONG.piano.map(a=>({m:a[0],t:mStart[a[0]]+a[1]+a[5],d:Math.max(0.1,a[2]-Math.max(0,a[5])),p:a[3]}));
 for(const n of P) if(n.t+n.d>=TOTAL-1e-6) n.d+=FERM;                 // hold the final chord (fermata)
-const LINES=SONG.lines.map((l,i)=>({i,pg:l[0],idx:l[1],m0:l[2],m1:l[3],b0:mStart[l[2]],b1:mStart[l[3]]+mLen(l[3]),
-  vocal:V.some(n=>n.m>=l[2]&&n.m<=l[3])}));
+const mName=m=>m===0?'처음':String(m);
+const mRange=(a,b)=>a===b?mName(a)+'마디':mName(a)+'–'+b+'마디';
+const LINES=makeGroups(SONG.lines,4).map((g,i)=>({i,pg:g.pg,idx:g.idx,m0:g.m0,m1:g.m1,b0:mStart[g.m0],b1:mStart[g.m1]+mLen(g.m1),
+  vocal:V.some(n=>n.m>=g.m0&&n.m<=g.m1)}));
 const SECTIONS=[[0,6,'전주'],[7,14,'1절 · 주님 내 마음이'],[15,19,'1절 · 나그네로'],[20,28,'후렴 1 · 믿음이 없이는'],[29,29,'간주'],
   [30,37,'2절 · 주님 내 마음이'],[38,42,'2절 · 나그네로 (2부)'],[43,51,'후렴 2 (2부)'],[52,61,'후렴 3 (조바꿈 · 3부)'],[62,64,'맺음 · 다시 주님을'],[65,67,'후주']];
 const secOf=m=>SECTIONS.findIndex(s=>m>=s[0]&&m<=s[1]);
 const lineOfBeat=b=>{for(const L of LINES) if(b<L.b1-1e-6) return L.i; return LINES.length-1;};
-const mName=m=>m===0?'처음':String(m);
-const mRange=(a,b)=>a===b?mName(a)+'마디':mName(a)+'–'+b+'마디';
 
 /* ---------- names ---------- */
 const LY=new Map(SONG.lyrics.map(a=>[a[0]+':'+a[1],a[2]]));
@@ -286,11 +288,11 @@ const absName=(n,oct)=>LET[n.letter]+accS(n.alter)+(oct?Math.floor((n.p-n.alter)
 const label=n=>st.names==='sol'?solName(n):absName(n,false);
 
 /* ---------- state ---------- */
-const st={part:'S',div:'S',mix:'focus',range:'line',line:2,sec:1,tempo:100,countIn:true,click:false,names:'sol',tone:'piano',view:'staff',cur:null};
+const st={part:'S',div:'S',mix:'focus',range:'line',line:1,sec:1,tempo:100,countIn:true,click:false,names:'sol',tone:'piano',view:'staff',cur:null};
 const LS='mideumi-part-practice.v1';
 try{const s=JSON.parse(localStorage.getItem(LS)||'null');
   if(s) for(const k of ['part','div','mix','range','line','sec','tempo','countIn','click','names','tone','view']) if(s[k]!=null&&typeof s[k]===typeof st[k]) st[k]=s[k];
-  if(!(st.line>=0&&st.line<LINES.length)) st.line=2; if(!(st.sec>=0&&st.sec<SECTIONS.length)) st.sec=secOf(LINES[st.line].m0);
+  if(!(st.line>=0&&st.line<LINES.length)) st.line=1; if(!(st.sec>=0&&st.sec<SECTIONS.length)) st.sec=secOf(LINES[st.line].m0);
 }catch(e){}
 const save=()=>{try{const o={};for(const k of ['part','div','mix','range','line','sec','tempo','countIn','click','names','tone','view']) o[k]=st[k];localStorage.setItem(LS,JSON.stringify(o));}catch(e){}};
 const BIT={S:1,M:2,A:4};
@@ -305,79 +307,147 @@ const STAFF_BY_M=new Map(); for(const e of STAFF){ if(!STAFF_BY_M.has(e[0])) STA
 const STEP=[0,2,4,5,7,9,11], VFDUR={4:'w',3:'hd',2:'h',1.75:'qdd',1.5:'qd',1:'q',0.75:'8d',0.5:'8',0.25:'16'};
 const SVGNS='http://www.w3.org/2000/svg';
 function svgEl(parent,tag,attrs,text){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;parent.appendChild(e);return e;}
+const fifthsAt=m=>m>=SONG.keyChange?3:-4;
+const SHARPS=[3,0,4,1,5,2,6], FLATS=[6,2,5,1,4,0,3];
+const keyAlt=f=>{const o={}; if(f>0) for(let i=0;i<f;i++) o[SHARPS[i]]=1; else for(let i=0;i<-f;i++) o[FLATS[i]]=-1; return o;};
+const KEYNAME={'-4':'Ab','3':'A'};
+const STAFF_NEW=new Map(); STAFF_BY_M.forEach((list,m)=>STAFF_NEW.set(m,list.map(e=>[e[0],0,e[1],e[2],VFDUR[e[2]]+(e[3].length?'':'r'),0,e[3]])));
+const HK={sIdx:()=>0, evs:(m,s)=>STAFF_NEW.get(m)||[], bit:m=>myBit(m), lyric:(m,s,bt)=>LY.get(m+':'+bt)||'', mark:m=>'', restText:s=>''};
+/* ---------- four measures per screen, wrapped into rows: nothing glides while playing ---------- */
+function makeGroups(systems,per){               // systems: [[page,line,m0,m1,repeat?]] -> groups aligned to printed measure numbers
+  const sysOf=m=>systems.find(s=>m>=s[2]&&m<=s[3])||systems[systems.length-1];
+  const num=m=>{const v=parseInt(mName(m),10);return isNaN(v)?null:v;};
+  const out=[]; let cur=null;
+  for(let m=0;m<N;m++){
+    const n=num(m), s=sysOf(m), prev=m>0?num(m-1):null, key=n==null?0:Math.floor((n-1)/per);
+    const jump=m>0&&n!=null&&prev!=null&&n!==prev+1;
+    if(!cur||jump||(cur.hasNum&&cur.key!==key)){ cur={m0:m,m1:m,pg:s[0],idx:s[1],rep:s[4]||0,key,hasNum:n!=null}; out.push(cur); }
+    else{ cur.m1=m; if(!cur.hasNum&&n!=null){cur.key=key;cur.hasNum=true;} }
+  }
+  return out;
+}
+let ROW={h:150,y0:-14,ly:92,sol:110,ph:[18,78],top:26};
 function renderStaff(){
-  const VF=Vex.Flow, L=LINES[st.line], wrap=$('rollWrap'), host=$('staffHost');
+  const VF=Vex.Flow, L=LINES[st.line], wrap=$('rollWrap'), host=$('staffHost'), sIdx=HK.sIdx();
+  const clef=sIdx?'bass':'treble', restKey=sIdx?'d/3':'b/4', wholeRestKey=sIdx?'f/3':'d/5';
   $('roll').innerHTML=''; $('roll').setAttribute('width',0); $('roll').setAttribute('height',0); host.hidden=false; host.innerHTML='';
   elsByK=new Map(); xByK=new Map(); onK=null;
-  const avail=wrap.clientWidth||340, padL=6, padR=10, y0=22, H=188, lyY=160, solY=178;
-  const ms=[]; let total=0;
+  const avail=wrap.clientWidth||340, padL=6, padR=10, inner=avail-padL-padR;
+  const ms=[];
   for(let m=L.m0;m<=L.m1;m++){
-    const evs=STAFF_BY_M.get(m)||[], first=m===L.m0, nKey=m>=SONG.keyChange?3:4;
-    const ka=KEYALT[m>=SONG.keyChange?'A':'Ab']; let w=0; for(const e of evs) w+=(e[2]>=2?46:e[2]>=1?38:30)+(e[3].some(h=>h[1]!==(ka[h[0]]||0))?12:0);
+    const evs=HK.evs(m,sIdx), f=fifthsAt(m), pf=m>0?fifthsAt(m-1):f, ka=keyAlt(f);
+    let w=0; for(const e of evs) w+=(e[3]>=2?46:e[3]>=1?38:30)+(e[6].some(h=>h[1]!==(ka[h[0]]||0))?12:0);
     w=Math.max(evs.length?120:90,w+18);
-    const extra=(first?34+nKey*11+(L.i===0?24:0):0)+(m===SONG.keyChange&&!first?86:0);
-    ms.push({m,evs,first,w,extra}); total+=w+extra;
+    ms.push({m,evs,w,f,pf,head:34+Math.abs(f)*11+(m===0?24:0),change:f!==pf?20+(Math.abs(f)+Math.abs(pf))*11:0});
   }
-  const fixed=ms.reduce((a,o)=>a+o.extra,0), scale=Math.max(1,(avail-padL-padR-fixed)/(total-fixed));
-  const W=Math.round(padL+padR+fixed+(total-fixed)*scale);
+  // row height follows the notes on this screen: room for ledger lines above and below, lyrics right under the lowest note
+  const botIdx=sIdx?18:30, topIdx=botIdx+8; let hi=topIdx, lowPx=0, anyTup=false;
+  for(const o of ms) for(const e of o.evs){ if(!e[6].length) continue; if(e[5]) anyTup=true;
+    let dmin=99, dmax=-99, sum=0; for(const h of e[6]){ const d=h[2]*7+h[0]; sum+=d; if(d<dmin) dmin=d; if(d>dmax) dmax=d; }
+    if(dmax>hi) hi=dmax;
+    const down=sum/e[6].length>=botIdx+4&&e[3]<4;                       // stem goes down from notes on or above the middle line
+    lowPx=Math.max(lowPx,(botIdx-dmin)*5+(down?35+(e[3]<1?14:0):6)); }
+  const topLine=30+Math.max(0,(hi-topIdx)*5-4), botLine=topLine+40;
+  ROW={top:topLine,y0:topLine-40,ly:botLine+Math.max(28,lowPx+18)+(anyTup?8:0)};
+  ROW.sol=ROW.ly+18; ROW.h=ROW.sol+12; ROW.ph=[topLine-8,botLine+12];
+  const rows=[]; let row=null;
+  for(const o of ms){
+    if(!row||row.need+o.w+o.change>inner){ row={ms:[],need:o.head+o.w,fixed:o.head}; rows.push(row); o.first=true; }
+    else{ row.need+=o.w+o.change; row.fixed+=o.change; o.first=false; }
+    row.ms.push(o);
+  }
+  let W=avail;
+  for(const r of rows){ const tw=r.ms.reduce((a,o)=>a+o.w,0); r.scale=Math.min(2.4,Math.max(0.66,(inner-r.fixed)/tw)); W=Math.max(W,Math.round(padL+padR+r.fixed+tw*r.scale)); }
+  const RH=ROW.h, H=rows.length*RH;
   const renderer=new VF.Renderer(host,VF.Renderer.Backends.SVG); renderer.resize(W,H);
   const ctx=renderer.getContext(); ctx.setFillStyle('currentColor'); ctx.setStrokeStyle('currentColor');
   const svg=host.querySelector('svg'); svg.style.color='inherit';
-  const pts=[], pend=new Map(); let x=padL, lastStave=null;
+  const pend=new Map(), rowGeo=[]; let anyNote=false;
   const myAt=(T,p)=>{for(let i=0;i<MY.length;i++){const n=MY[i]; if(n.t>T+1e-6) break; if(n.p===p&&T<n.t+n.d-1e-6) return i;} return -1;};
-  for(const o of ms){
-    const m=o.m, key=m>=SONG.keyChange?'A':'Ab', width=o.w*scale+o.extra;
-    const stave=new VF.Stave(x,y0,width,{fill_style:'currentColor'});
-    if(o.first){ stave.addClef('treble').addKeySignature(key); if(L.i===0) stave.addTimeSignature('4/4'); }
-    else if(m===SONG.keyChange) stave.addKeySignature('A','Ab');
-    stave.setContext(ctx).draw(); lastStave=stave;
-    svgEl(svg,'rect',{class:'mhit','data-m':m,x:x,y:0,width:width,height:y0+12});
-    svgEl(svg,'text',{class:'mnum','data-m':m,x:x+4,y:14},mName(m));
-    const notes=[], meta=[];
-    if(!o.evs.length){ notes.push(new VF.StaveNote({keys:['d/5'],duration:(mLen(m)===4?'w':'h')+'r',align_center:true})); pts.push([mStart[m],stave.getNoteStartX()]); }
-    for(const e of o.evs){
-      const ds=VFDUR[e[2]], hs=e[3].slice().reverse();        // ascending pitch, as the library expects
-      const note=hs.length? new VF.StaveNote({keys:hs.map(h=>LET[h[0]].toLowerCase()+(h[1]>0?'#':h[1]<0?'b':'')+'/'+h[2]),duration:ds,auto_stem:true})
-                          : new VF.StaveNote({keys:['b/4'],duration:ds+'r'});
-      for(let i=(ds.match(/d/g)||[]).length;i>0;i--) VF.Dot.buildAndAttach([note],{all:true});
-      notes.push(note); meta.push({e,hs,note});
-    }
-    const voice=new VF.Voice({num_beats:mLen(m),beat_value:4}).setMode(VF.Voice.Mode.SOFT).addTickables(notes);
-    VF.Accidental.applyAccidentals([voice],key);
-    const beams=VF.Beam.generateBeams(notes,{groups:[new VF.Fraction(1,4)]});
-    new VF.Formatter().joinVoices([voice]).format([voice],Math.max(40,stave.getNoteEndX()-stave.getNoteStartX()-14));
-    voice.draw(ctx,stave); beams.forEach(b=>b.setContext(ctx).draw());
-    for(const q of meta){
-      const {e,hs,note}=q, T=mStart[m]+e[1], nx=note.getAbsoluteX()+6;
-      pts.push([T,nx]);
-      let kHere=-1;
-      hs.forEach((h,i)=>{
-        const p=12*(h[2]+1)+STEP[h[0]]+h[1], id=h[0]+':'+h[1]+':'+h[2];
-        if(h[4]&1){ const src=pend.get(id); pend.delete(id);
-          new VF.StaveTie({first_note:src?src.note:null,last_note:note,first_indices:[src?src.i:0],last_indices:[i]}).setContext(ctx).draw(); }
-        if(h[4]&2) pend.set(id,{note,i});
-        if(h[3]&myBit(m)){
-          const k=myAt(T,p); kHere=k;
-          const nh=note.noteHeads&&note.noteHeads[i], el=nh&&document.getElementById('vf-'+nh.getAttribute('id'));
-          if(el){ el.classList.add('mine'); if(k>=0){ if(!elsByK.has(k)) elsByK.set(k,[]); elsByK.get(k).push(el); if(!xByK.has(k)) xByK.set(k,nx); } }
-        }
-      });
-      if(kHere>=0){
-        svgEl(svg,'rect',{class:'hit','data-k':kHere,x:nx-11,y:y0+24,width:22,height:118});
-        const n=MY[kHere];
-        if(Math.abs(n.t-T)<1e-6) svgEl(svg,'text',{class:'sol',x:nx,y:solY},label(n));
+  const openTies=()=>{ pend.forEach(src=>{ new VF.StaveTie({first_note:src.note,last_note:null,first_indices:[src.i],last_indices:[src.i]}).setContext(ctx).draw(); }); pend.clear(); };
+  rows.forEach((r,ri)=>{
+    const top=ri*RH, y0=top+ROW.y0, pts=[]; let x=padL, lastStave=null;
+    if(ri>0) svgEl(svg,'line',{class:'rowsep',x1:0,y1:top,x2:W,y2:top});
+    for(const o of r.ms){
+      const m=o.m, key=KEYNAME[o.f], width=o.w*r.scale+(o.first?o.head:o.change), bit=HK.bit(m);
+      const stave=new VF.Stave(x,y0,width,{fill_style:'currentColor'});
+      if(o.first){ stave.addClef(clef).addKeySignature(key); if(m===0) stave.addTimeSignature(SONG.beats+'/4'); }
+      else if(o.change) stave.addKeySignature(key,KEYNAME[o.pf]);
+      stave.setContext(ctx).draw(); lastStave=stave;
+      svgEl(svg,'rect',{class:'mhit','data-m':m,x:x,y:top,width:width,height:18});
+      svgEl(svg,'text',{class:'mnum','data-m':m,x:x+4,y:top+14},mName(m)+(HK.mark(m)?'  '+HK.mark(m):''));
+      const notes=[], meta=[], tup=[]; let run=[];
+      const restDur=mLen(m)>=4?'w':mLen(m)>=2?'h':'q';
+      if(!o.evs.length||o.evs[0][4]==='wr'){ notes.push(new VF.StaveNote({clef,keys:[mLen(m)>=4?wholeRestKey:restKey],duration:restDur+'r',align_center:true})); pts.push([mStart[m],stave.getNoteStartX()]); }
+      else for(const e of o.evs){
+        const ds=e[4], hs=e[6].slice().reverse();        // ascending pitch, as the library expects
+        const note=hs.length? new VF.StaveNote({clef,keys:hs.map(h=>LET[h[0]].toLowerCase()+(h[1]>0?'#':h[1]<0?'b':'')+'/'+h[2]),duration:ds,auto_stem:true})
+                            : new VF.StaveNote({clef,keys:[restKey],duration:ds});
+        for(let i=(ds.match(/d/g)||[]).length;i>0;i--) VF.Dot.buildAndAttach([note],{all:true});
+        notes.push(note); meta.push({e,hs,note}); if(hs.length) anyNote=true;
+        if(e[5]){ run.push(note); if(run.length===3){ tup.push(new VF.Tuplet(run,{num_notes:3,notes_occupied:2})); run=[]; } } else run=[];
       }
-      const ly=LY.get(m+':'+e[1]); if(ly&&hs.length) svgEl(svg,'text',{class:'lyr',x:nx,y:lyY},ly);
+      const voice=new VF.Voice({num_beats:mLen(m),beat_value:4}).setMode(VF.Voice.Mode.SOFT).addTickables(notes);
+      VF.Accidental.applyAccidentals([voice],key);
+      const beams=VF.Beam.generateBeams(notes,{groups:[new VF.Fraction(1,4)]});
+      new VF.Formatter().joinVoices([voice]).format([voice],Math.max(40,stave.getNoteEndX()-stave.getNoteStartX()-14));
+      voice.draw(ctx,stave); beams.forEach(b=>b.setContext(ctx).draw()); tup.forEach(t=>t.setContext(ctx).draw());
+      for(const q of meta){
+        const {e,hs,note}=q, T=mStart[m]+e[2], nx=note.getAbsoluteX()+6;
+        pts.push([T,nx]);
+        let kHere=-1;
+        hs.forEach((h,i)=>{
+          const p=12*(h[2]+1)+STEP[h[0]]+h[1], id=h[0]+':'+h[1]+':'+h[2];
+          if(h[4]&1){ const src=pend.get(id); pend.delete(id);
+            new VF.StaveTie({first_note:src?src.note:null,last_note:note,first_indices:[src?src.i:0],last_indices:[i]}).setContext(ctx).draw(); }
+          if(h[4]&2) pend.set(id,{note,i});
+          if(h[3]&bit){
+            const k=myAt(T,p); kHere=k;
+            const nh=note.noteHeads&&note.noteHeads[i], el=nh&&document.getElementById('vf-'+nh.getAttribute('id'));
+            if(el){ el.classList.add('mine'); if(k>=0){ if(!elsByK.has(k)) elsByK.set(k,[]); elsByK.get(k).push(el); if(!xByK.has(k)) xByK.set(k,nx); } }
+          }
+        });
+        if(kHere>=0){
+          svgEl(svg,'rect',{class:'hit','data-k':kHere,x:nx-11,y:top+ROW.top-14,width:22,height:ROW.ly-ROW.top-4});
+          const n=MY[kHere];
+          if(Math.abs(n.t-T)<1e-6) svgEl(svg,'text',{class:'sol',x:nx,y:top+ROW.sol},label(n));
+        }
+        const ly=hs.length&&!hs.every(h=>h[4]&1)?HK.lyric(m,sIdx,e[2]):''; if(ly) svgEl(svg,'text',{class:'lyr',x:nx,y:top+ROW.ly},ly);
+      }
+      x+=width;
     }
-    x+=width;
-  }
-  pend.forEach(src=>{ new VF.StaveTie({first_note:src.note,last_note:null,first_indices:[src.i],last_indices:[src.i]}).setContext(ctx).draw(); });
-  pts.push([L.b1,lastStave.getX()+lastStave.getWidth()-2]); pts.sort((a,b)=>a[0]-b[0]);
-  const X=b=>{ if(b<=pts[0][0]) return pts[0][1]; for(let i=1;i<pts.length;i++) if(b<=pts[i][0]){const a=pts[i-1],c=pts[i]; return c[0]===a[0]?c[1]:a[1]+(c[1]-a[1])*(b-a[0])/(c[0]-a[0]);} return pts[pts.length-1][1]; };
-  if(!L.vocal) svgEl(svg,'text',{class:'empty',x:W/2,y:lyY},'이 줄은 노래가 쉽니다 (반주만)');
-  svgEl(svg,'line',{class:'ph',id:'ph',x1:0,y1:y0+26,x2:0,y2:y0+96,visibility:'hidden'});
-  geo={L,X};
+    openTies();                                           // a tie never runs from one row to the next as a long line
+    const last=r.ms[r.ms.length-1], b1=mStart[last.m]+mLen(last.m);
+    pts.push([b1,lastStave.getX()+lastStave.getWidth()-2]); pts.sort((a,b)=>a[0]-b[0]);
+    rowGeo.push({b1,pts,y1:top+ROW.ph[0],y2:top+ROW.ph[1]});
+  });
+  const pos=b=>{
+    let ri=rowGeo.length-1; for(let i=0;i<rowGeo.length;i++) if(b<rowGeo[i].b1-1e-6){ri=i;break;}
+    const g=rowGeo[ri], pts=g.pts; let x=pts[pts.length-1][1];
+    if(b<=pts[0][0]) x=pts[0][1]; else for(let i=1;i<pts.length;i++) if(b<=pts[i][0]){const a=pts[i-1],c=pts[i]; x=c[0]===a[0]?c[1]:a[1]+(c[1]-a[1])*(b-a[0])/(c[0]-a[0]); break;}
+    return {x,y1:g.y1,y2:g.y2,row:ri};
+  };
+  if(!L.vocal) svgEl(svg,'text',{class:'empty',x:W/2,y:ROW.ly},'이 화면은 노래가 쉽니다 (반주만)');
+  else if(!anyNote) svgEl(svg,'text',{class:'empty',x:W/2,y:ROW.ly},HK.restText(sIdx));
+  svgEl(svg,'line',{class:'ph',id:'ph',x1:0,y1:rowGeo[0].y1,x2:0,y2:rowGeo[0].y2,visibility:'hidden'});
+  geo={L,pos,X:b=>pos(b).x,row:null};
   if(st.cur!=null) mark(st.cur);
+}
+function movePh(b){                               // playhead: jump to the right row; the score itself stays still
+  const ph=$('ph'); if(!ph||!geo) return;
+  const q=geo.pos?geo.pos(b):{x:geo.X(b)};
+  ph.setAttribute('visibility','visible'); ph.setAttribute('x1',q.x); ph.setAttribute('x2',q.x);
+  if(q.y1!=null){ ph.setAttribute('y1',q.y1); ph.setAttribute('y2',q.y2); }
+  const wrap=$('rollWrap');
+  if(wrap.scrollWidth>wrap.clientWidth+2&&(q.x>wrap.scrollLeft+wrap.clientWidth-20||q.x<wrap.scrollLeft+2)) wrap.scrollLeft=Math.max(0,q.x-20);   // turn the page, never glide
+  if(q.row!=null&&q.row!==geo.row){
+    geo.row=q.row;
+    const r=wrap.getBoundingClientRect(), bar=document.querySelector('.mainrow'), fixed=bar&&getComputedStyle(bar).position==='fixed'?bar.getBoundingClientRect().height:0;
+    const vis=window.innerHeight-fixed-6;
+    let t=r.top+q.row*ROW.h, bt=t+ROW.h;
+    if(r.height<=vis-6){ t=r.top; bt=r.bottom; }             // the whole screenful fits: bring all of it into view once, then stay put
+    if(bt>vis) window.scrollBy(0,Math.min(bt-vis,t-6)); else if(t<6) window.scrollBy(0,t-6);
+  }
 }
 function renderRoll(){
   if(st.view==='staff'&&window.Vex){ try{ renderStaff(); return; }catch(err){ st.view='roll'; } }
@@ -385,14 +455,14 @@ function renderRoll(){
   const L=LINES[st.line], wrap=$('rollWrap'), svg=$('roll');
   const T=L.b1-L.b0, padL=10, padR=14, top=32, bot=32, rowH=11;
   const avail=wrap.clientWidth||340;
-  const ppb=Math.max(52,(avail-padL-padR)/T), W=Math.round(padL+padR+T*ppb);
+  const ppb=Math.max(30,(avail-padL-padR)/T), W=Math.round(padL+padR+T*ppb);
   const notes=V.filter(n=>n.t<L.b1-1e-6&&n.t+n.d>L.b0+1e-6);
   let lo=Infinity,hi=-Infinity; for(const n of notes){lo=Math.min(lo,n.p);hi=Math.max(hi,n.p);}
   if(!notes.length){lo=62;hi=70;}
   lo-=2;hi+=2; if(hi-lo<11){const e=Math.ceil((11-(hi-lo))/2);lo-=e;hi+=e;}
   const H=top+(hi-lo+1)*rowH+bot;
   const X=b=>padL+(b-L.b0)*ppb, Y=p=>top+(hi-p)*rowH;
-  geo={L,X,top,H,bot,ppb};
+  geo={L,X,top,H,bot,ppb,pos:b=>({x:X(b),y1:top-8,y2:H-bot})};
   let s='';
   for(let m=L.m0;m<=L.m1;m++){
     const x=X(mStart[m]), w=mLen(m)*ppb;
@@ -423,7 +493,7 @@ function renderRoll(){
     s+=`<line class="lyrline" x1="${padL}" y1="${H-bot+5}" x2="${W-padR}" y2="${H-bot+5}"/>`;
     for(let m=L.m0;m<=L.m1;m++) for(const a of SONG.lyrics) if(a[0]===m) s+=`<text class="lyr" x="${(X(mStart[m]+a[1])+1).toFixed(1)}" y="${H-10}">${a[2]}</text>`;
   }
-  if(!L.vocal) s+=`<text class="empty" x="${W/2}" y="${H/2+4}" text-anchor="middle">이 줄은 노래가 쉽니다 (반주만)</text>`;
+  if(!L.vocal) s+=`<text class="empty" x="${W/2}" y="${H/2+4}" text-anchor="middle">이 화면은 노래가 쉽니다 (반주만)</text>`;
   s+=`<line class="ph" id="ph" x1="0" y1="${top-8}" x2="0" y2="${H-bot}" visibility="hidden"/>`;
   svg.setAttribute('width',W); svg.setAttribute('height',H); svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.innerHTML=s;
@@ -451,9 +521,9 @@ function seg(id,key,after){
 }
 function renderWhere(){
   const L=LINES[st.line];
-  $('lineTitle').textContent=`${L.pg}쪽 ${L.idx}째 줄 · ${mRange(L.m0,L.m1)}`;
+  $('lineTitle').textContent=mRange(L.m0,L.m1);
   const names=[...new Set([secOf(L.m0),secOf(L.m1)])].map(i=>SECTIONS[i][2]);
-  $('lineSub').textContent=names.join(' → ');
+  $('lineSub').textContent=`${L.pg}쪽 ${L.idx}째 줄부터 · `+names.join(' → ');
   $('prevLine').disabled=st.line===0; $('nextLine').disabled=st.line===LINES.length-1;
   document.querySelectorAll('#pages button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.i===st.line)));
   document.querySelectorAll('#chips button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.i===st.sec)));
@@ -631,13 +701,10 @@ function frame(){
     const left=Math.ceil((pl.tm-ac.currentTime)/pl.spb);
     readout(null,pl.nLead?'예비박 '+Math.max(1,SONG.beats-left+1):''); mark(null); pl.lastK=undefined;
     const li=lineOfBeat(pl.from); if(li!==st.line) setLine(li,{follow:true});
-    if($('ph')){$('ph').setAttribute('visibility','visible');$('ph').setAttribute('x1',geo.X(pl.from));$('ph').setAttribute('x2',geo.X(pl.from));}
+    movePh(pl.from);
   }else{
     const li=lineOfBeat(Math.min(b,pl.b1-0.01,TOTAL-0.01)); if(li!==st.line){ setLine(li,{follow:true}); pl.lastK=undefined; }
-    const p2=$('ph'), x=geo.X(Math.min(b,geo.L.b1));
-    p2.setAttribute('visibility','visible'); p2.setAttribute('x1',x); p2.setAttribute('x2',x);
-    const wrap=$('rollWrap');
-    if(wrap.scrollWidth>wrap.clientWidth+2){const want=x-wrap.clientWidth*0.35; if(Math.abs(wrap.scrollLeft-want)>24) wrap.scrollLeft=Math.max(0,want);}
+    movePh(Math.min(b,geo.L.b1));
     let k=null; for(let i=0;i<MY.length;i++){const n=MY[i]; if(n.t>b+1e-6) break; if(b<n.t+n.d) k=i;}
     if(k!==pl.lastK){ pl.lastK=k; mark(k); if(k!=null) readout(MY[k]); else readout(null,'쉼'); }
   }
